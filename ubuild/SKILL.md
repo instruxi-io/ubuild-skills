@@ -3,6 +3,8 @@ name: ubuild
 description: "Interactive Flutter app scaffolding framework. Interviews the developer, generates a structured scaffold plan, and builds out the app phase by phase. Trigger: 'ubuild', 'scaffold', 'new flutter app', 'app scaffolding'"
 ---
 
+Before doing anything else, print this exactly:
+
 ```
          ██╗   ██╗██████╗ ██╗   ██╗██╗██╗     ██████╗ 
          ██║   ██║██╔══██╗██║   ██║██║██║     ██╔══██╗
