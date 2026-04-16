@@ -28,7 +28,7 @@ uBuild is a phased, interview-driven scaffolding framework for Flutter apps. It 
 Every ubuild scaffold assumes the developer starts from **`ubuild-mobile`** (https://github.com/instruxi-io/ubuild-mobile), which ships with reusable boilerplate that you should NOT re-scaffold:
 
 - **Backend:** Enforcer SDK (`enforcer_sdk` git dep, V2 API).
-- **Auth flow:** Email OTP via `/auth/login` + `/auth/login/verify`. Split `LoginEmailScreen` + `LoginOtpScreen`. `AuthState` is a sealed hierarchy (`Restoring | Unauthenticated | Loading | OtpSent | Authenticated`). **Google Sign-In, passkeys, SIWE, Privy are NOT in the template** — email OTP only is the opinionated default.
+- **Auth flow:** Email OTP via `/auth/login` + `/auth/login/verify` (always on). Split `LoginEmailScreen` + `LoginOtpScreen`. `AuthState` is a sealed hierarchy (`Restoring | Unauthenticated | Loading | OtpSent | Authenticated`). **Google Sign-In and Passkey auth ship as visibility-gated opt-ins** — `GoogleAuthService` + `PasskeyService` + auth-state methods (`loginWithGoogle`, `loginWithPasskey`) are wired end-to-end. Buttons appear in the login UI only when `GOOGLE_CLIENT_ID` / `ENABLE_PASSKEY=true` are set in the active `.env.<flavor>`. **SIWE and Privy are NOT in the template** — add if needed.
 - **JWT lifecycle:** persisted via `flutter_secure_storage` (`TokenStorage`). `AuthInterceptor` handles `401 → /auth/refresh → retry` with concurrent-401 coalescing. SDK's api-key kept in sync via `ref.listen(authStateProvider)` inside `enforcerSdkProvider` so hot-reload provider rebuilds don't drop the bearer.
 - **Onboarding:** two gated steps — `VerifyIdentityScreen` (SMS phone OTP via `/auth/verify/phone/{send,confirm}`) + `ProfileSetupScreen` (`PATCH /users/me`). `OnboardingStatus` derives `nextStep` from `AccountSnapshot`.
 - **App shell:** `RailShell` (NavigationRail, desktop-first, falls back at narrow widths) + `OnboardingShell` (step indicator) + bare (splash/login). Template rail has **Home + Profile** as seed destinations — add your own.
@@ -98,10 +98,12 @@ Ask these questions interactively. Don't dump them all at once — have a conver
 - Target platforms? (iOS, Android, Web, Linux, macOS, Windows)
 
 ### Authentication & Backend
-Backend is Enforcer; auth is email OTP. Do NOT re-ask these — they're the template default. Ask instead:
+Backend is Enforcer; email OTP is always on. Don't re-ask those. Ask instead:
 - Which Enforcer domains are in scope? (KV, storage, wallets, messaging, contacts, groups, verification)
 - Tenancy: single fixed tenant, or tenant selector? (default: single, resolved from `ENFORCER_TENANT_CODE` env)
-- Any additional auth flows beyond email OTP required? (Google / Apple / passkeys / SIWE / Privy — deviations from the template, usually no)
+- Enable Google Sign-In? (set `GOOGLE_CLIENT_ID` in the active env; button appears automatically)
+- Enable Passkey / WebAuthn? (set `ENABLE_PASSKEY=true`; button appears automatically; not supported on Linux)
+- SIWE or Privy needed? (not in template — requires custom wiring)
 
 ### Features & Pages
 - List the main features / screens (keep it high-level, 5-15 items)
