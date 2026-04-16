@@ -17,9 +17,30 @@ Before doing anything else, print this exactly:
 
 # uBuild — Interactive Flutter App Scaffolder
 
-uBuild is a phased, interview-driven scaffolding framework for Flutter apps. It generates a `scaffold/` directory containing structured planning documents, then uses those documents to build out the actual Flutter project.
+uBuild is a phased, interview-driven scaffolding framework for Flutter apps. It generates a `scaffold/` directory containing structured planning documents, then uses those documents to build out the actual Flutter project **on top of the `ubuild-mobile` template**.
 
 **You MUST follow the phases in order. Each phase produces artifacts in `scaffold/`. Transitioning to the next phase requires a recursive audit — re-read every artifact produced so far, verify consistency, flag contradictions, and get explicit developer approval before proceeding.**
+
+---
+
+## The Base Template
+
+Every ubuild scaffold assumes the developer starts from **`ubuild-mobile`** (https://github.com/instruxi-io/ubuild-mobile), which ships with reusable boilerplate that you should NOT re-scaffold:
+
+- **Backend:** Enforcer SDK (`enforcer_sdk` git dep, V2 API).
+- **Auth flow:** Email OTP via `/auth/login` + `/auth/login/verify`. Split `LoginEmailScreen` + `LoginOtpScreen`. `AuthState` is a sealed hierarchy (`Restoring | Unauthenticated | Loading | OtpSent | Authenticated`). **Google Sign-In, passkeys, SIWE, Privy are NOT in the template** — email OTP only is the opinionated default.
+- **JWT lifecycle:** persisted via `flutter_secure_storage` (`TokenStorage`). `AuthInterceptor` handles `401 → /auth/refresh → retry` with concurrent-401 coalescing. SDK's api-key kept in sync via `ref.listen(authStateProvider)` inside `enforcerSdkProvider` so hot-reload provider rebuilds don't drop the bearer.
+- **Onboarding:** two gated steps — `VerifyIdentityScreen` (SMS phone OTP via `/auth/verify/phone/{send,confirm}`) + `ProfileSetupScreen` (`PATCH /users/me`). `OnboardingStatus` derives `nextStep` from `AccountSnapshot`.
+- **App shell:** `RailShell` (NavigationRail, desktop-first, falls back at narrow widths) + `OnboardingShell` (step indicator) + bare (splash/login). Template rail has **Home + Profile** as seed destinations — add your own.
+- **Routing:** GoRouter with auth + onboarding redirect guards, bridged to Riverpod via a `ChangeNotifier` on `refreshListenable`.
+- **State:** Riverpod.
+- **Theme:** Material 3, seed-color-driven, `AppSpacing` / `AppRadii` / `AppBreakpoints` tokens, `AppStatusColors` `ThemeExtension` (verified/pending/unverified). Inter typeface via `google_fonts`. `ThemeMode.system`.
+- **Shared widgets:** `AsyncValueBuilder`, `EmptyState`, `ErrorState`, `LoadingScaffold`, `UserAvatar`, `VerificationStatusChip`.
+- **Config:** `EnvConfig` loads from `assets/env/.env.<flavor>` selected via `--dart-define=ENV=<dev|staging|prod>`. Bundled env files have `ENFORCER_BASE_URL` + `ENFORCER_TENANT_CODE`.
+
+**Implication for the interview:** don't ask "which auth flow?" or "state management?" or "routing package?" — they're fixed. Ask about the *app-specific* features the developer is building on top.
+
+**Implication for Phase 6:** the template already provides splash, login, onboarding, shell, router, theme, and the Enforcer wiring. Phase 6 generates the *new* feature code (screens, providers, repositories) and hooks it into the existing router + rail. Do NOT overwrite the template files without explicit developer consent.
 
 ---
 
@@ -77,10 +98,10 @@ Ask these questions interactively. Don't dump them all at once — have a conver
 - Target platforms? (iOS, Android, Web, Linux, macOS, Windows)
 
 ### Authentication & Backend
-- Which auth flows? (email OTP, Google, Apple, passkeys/WebAuthn, SIWE, Privy, none)
-- Backend? (Enforcer API, Firebase, Supabase, custom REST, custom GraphQL, none)
-- If Enforcer: which features? (KV, storage, wallets, messaging, contacts, groups)
-- Multi-tenant? (single tenant, multi-tenant with tenant selector, auto-resolved)
+Backend is Enforcer; auth is email OTP. Do NOT re-ask these — they're the template default. Ask instead:
+- Which Enforcer domains are in scope? (KV, storage, wallets, messaging, contacts, groups, verification)
+- Tenancy: single fixed tenant, or tenant selector? (default: single, resolved from `ENFORCER_TENANT_CODE` env)
+- Any additional auth flows beyond email OTP required? (Google / Apple / passkeys / SIWE / Privy — deviations from the template, usually no)
 
 ### Features & Pages
 - List the main features / screens (keep it high-level, 5-15 items)
@@ -89,13 +110,11 @@ Ask these questions interactively. Don't dump them all at once — have a conver
 - Onboarding flow? (tutorial screens, terms acceptance, profile setup)
 
 ### Technical Preferences
-- State management? (Riverpod recommended, Bloc, Provider, other)
-- Navigation? (GoRouter recommended, auto_route, Navigator 2.0)
-- Design system? (Material 3, Cupertino, custom design system)
-- Responsive? (mobile-only, mobile+tablet, mobile+tablet+desktop)
+State management = Riverpod, routing = GoRouter, design = Material 3 — all fixed by the template. Ask instead:
+- Responsive target? (mobile-only, mobile+tablet, mobile+tablet+desktop — template is desktop-first with portability fallbacks)
 - Offline support needed?
 - Push notifications?
-- Deep linking?
+- Deep linking? (template has `/splash`, `/login`, `/login/verify`, `/onboarding/*`, `/home`, `/profile` — list your deep-linkable additions)
 
 ### Constraints
 - Existing codebase to integrate with, or greenfield?
@@ -195,19 +214,35 @@ Present the full audit. This is the last gate before code generation.
 
 ## Phase 6: Build
 
-**Goal:** Generate the actual Flutter project structure from the scaffold.
+**Goal:** Add the app's features on top of the `ubuild-mobile` template.
 
-This phase reads the entire `scaffold/` directory and generates:
+### What the template already provides (do NOT regenerate)
 
-1. **Directory structure** — `lib/src/` with feature-based organization
-2. **Route configuration** — GoRouter setup from sitemap
-3. **Theme** — `ThemeData` from theme.md tokens
-4. **Models** — Dart classes from models.md
-5. **Providers** — Riverpod providers from providers.md
-6. **Screens** — stub widgets for every route, wired to providers
-7. **App shell** — scaffold/nav from shell.md
+- `lib/src/auth/` — email OTP + JWT + `AuthInterceptor`
+- `lib/src/core/sdk_provider.dart` — Enforcer SDK with bearer-sync listener
+- `lib/src/config/env_config.dart` — flavor-switching env loader
+- `lib/src/router/app_router.dart` — GoRouter + auth/onboarding guards
+- `lib/src/shell/{rail_shell,onboarding_shell}.dart`
+- `lib/src/shared/theme/{app_theme,spacing,status_colors}.dart`
+- `lib/src/shared/widgets/*.dart` — AsyncValueBuilder, EmptyState, ErrorState, LoadingScaffold, UserAvatar, VerificationStatusChip
+- `lib/src/features/{account,onboarding,profile,splash,home}/`
+
+### What Phase 6 generates
+
+1. **New feature directories** under `lib/src/features/<feature-name>/` — models, repositories, providers, screens.
+2. **Rail destinations** — edit `rail_shell.dart`'s `_destinations` list to add the app's primary tabs.
+3. **Router additions** — append new `GoRoute` entries inside the existing `ShellRoute` for the rail-shelled routes, or as top-level routes for full-screen flows.
+4. **Theme tweaks** — seed color override, extra `ThemeExtension`s if the app has custom status states.
+5. **Additional onboarding steps** (if the app needs them) — extend `OnboardingStep` + `OnboardingStatus` + add the route.
+6. **New providers** — append to the existing Riverpod tree; never replace auth/account/onboarding providers.
 
 Code generation should be incremental — generate one feature at a time, verify it compiles (`flutter analyze`), then move to the next. Use the Dart MCP server for hot reload and error checking during generation.
+
+### Rules of thumb
+
+- If the scaffold references `SomeProvider` that already exists in the template (e.g., `accountProvider`), import it — don't redefine.
+- If the scaffold defines a new rail destination, add the route + edit `rail_shell.dart`'s `_destinations`; don't build a whole new shell.
+- Keep the `Ardis` → `App` naming convention: nothing in the generated code should be named after a product unless the developer explicitly asks.
 
 ---
 
