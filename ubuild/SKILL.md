@@ -28,7 +28,12 @@ uBuild is a phased, interview-driven scaffolding framework for Flutter apps. It 
 Every ubuild scaffold assumes the developer starts from **`ubuild-mobile`** (https://github.com/instruxi-io/ubuild-mobile), which ships with reusable boilerplate that you should NOT re-scaffold:
 
 - **Backend:** Enforcer SDK (`enforcer_sdk` git dep, V2 API).
-- **Auth flow:** Email OTP via `/auth/login` + `/auth/login/verify` (always on). Split `LoginEmailScreen` + `LoginOtpScreen`. `AuthState` is a sealed hierarchy (`Restoring | Unauthenticated | Loading | OtpSent | Authenticated`). **Google Sign-In and Passkey auth ship as visibility-gated opt-ins** — `GoogleAuthService` + `PasskeyService` + auth-state methods (`loginWithGoogle`, `loginWithPasskey`) are wired end-to-end. Buttons appear in the login UI only when `GOOGLE_CLIENT_ID` / `ENABLE_PASSKEY=true` are set in the active `.env.<flavor>`. **SIWE and Privy are NOT in the template** — add if needed.
+- **Auth flow:** Email OTP via `/auth/login` + `/auth/login/verify` (always on). Split `LoginEmailScreen` + `LoginOtpScreen`. `AuthState` is a sealed hierarchy (`Restoring | Unauthenticated | Loading | OtpSent | Authenticated`). Four login methods ship wired end-to-end:
+  - **Email OTP** — always visible.
+  - **Google Sign-In** — visible when `GOOGLE_CLIENT_ID` is set. On mobile/macOS/web it uses the `google_sign_in` plugin; on Linux/Windows it runs a loopback-redirect OAuth flow (`google_auth_linux.dart`) against a fixed port (default 39591, override with `--dart-define=GOOGLE_LOOPBACK_PORT=…`). Enforcer does the server-side token exchange, so no client secret lives in the app.
+  - **Passkey / WebAuthn** — visible when `ENABLE_PASSKEY=true`. Auto-hidden on Linux (no platform implementation in the `passkeys` package).
+  - **API key (dev only)** — visible when `ENV=dev`. Paste-and-go dialog; sends the key as `X-API-Key` via the `isApiKey` flag on `Authenticated`.
+  **SIWE and Privy are NOT in the template** — add if needed.
 - **JWT lifecycle:** persisted via `flutter_secure_storage` (`TokenStorage`). `AuthInterceptor` handles `401 → /auth/refresh → retry` with concurrent-401 coalescing. SDK's api-key kept in sync via `ref.listen(authStateProvider)` inside `enforcerSdkProvider` so hot-reload provider rebuilds don't drop the bearer.
 - **Onboarding:** two gated steps — `VerifyIdentityScreen` (SMS phone OTP via `/auth/verify/phone/{send,confirm}`) + `ProfileSetupScreen` (`PATCH /users/me`). `OnboardingStatus` derives `nextStep` from `AccountSnapshot`.
 - **App shell:** `RailShell` (NavigationRail, desktop-first, falls back at narrow widths) + `OnboardingShell` (step indicator) + bare (splash/login). Template rail has **Home + Profile** as seed destinations — add your own.
@@ -101,8 +106,9 @@ Ask these questions interactively. Don't dump them all at once — have a conver
 Backend is Enforcer; email OTP is always on. Don't re-ask those. Ask instead:
 - Which Enforcer domains are in scope? (KV, storage, wallets, messaging, contacts, groups, verification)
 - Tenancy: single fixed tenant, or tenant selector? (default: single, resolved from `ENFORCER_TENANT_CODE` env)
-- Enable Google Sign-In? (set `GOOGLE_CLIENT_ID` in the active env; button appears automatically)
-- Enable Passkey / WebAuthn? (set `ENABLE_PASSKEY=true`; button appears automatically; not supported on Linux)
+- Enable Google Sign-In? (set `GOOGLE_CLIENT_ID`; on Linux/Windows the client must be a "Desktop app" type and the tenant's Google connection `redirect_url` must match the loopback port)
+- Enable Passkey / WebAuthn? (set `ENABLE_PASSKEY=true`; auto-hidden on Linux)
+- API key login in dev? (always on when `ENV=dev` — paste a tenant API key and go)
 - SIWE or Privy needed? (not in template — requires custom wiring)
 
 ### Features & Pages
